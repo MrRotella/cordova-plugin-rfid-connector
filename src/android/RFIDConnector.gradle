@@ -5,7 +5,7 @@ jcenter()
    }
 }
 dependencies {
-  compile(name : 'Rfid.AsciiProtocol-1.4.5-release',ext:'aar')
+  compile(name : 'Rfid.AsciiProtocol-2.5.0-release',ext:'aar')
   compile(name : 'barcode_scanner_library_v2.3.1.0',ext:'aar')
   compile(name : 'API3_LIB-release-2.0.0.2',ext:'aar')
 }
