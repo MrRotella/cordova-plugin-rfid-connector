@@ -19,5 +19,12 @@
     "cordova-ios"
   ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "cordovaDependencies": {
+      "3.0.0": {
+        "cordova": ">100"
+      }
+    }
+  }
 }

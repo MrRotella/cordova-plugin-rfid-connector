@@ -22,10 +22,19 @@ import com.uk.tsl.rfid.asciiprotocol.enumerations.QueryTarget;
 import com.uk.tsl.rfid.asciiprotocol.enumerations.SelectAction;
 import com.uk.tsl.rfid.asciiprotocol.enumerations.SelectTarget;
 import com.uk.tsl.rfid.asciiprotocol.enumerations.TriState;
+import com.uk.tsl.rfid.asciiprotocol.device.IAsciiTransport;
+import com.uk.tsl.rfid.asciiprotocol.device.ObservableReaderList;
+import com.uk.tsl.rfid.asciiprotocol.device.Reader;
+import com.uk.tsl.rfid.asciiprotocol.device.ReaderManager;
+import com.uk.tsl.rfid.asciiprotocol.device.TransportType;
 import com.uk.tsl.rfid.asciiprotocol.responders.IAsciiCommandResponder;
 import com.uk.tsl.rfid.asciiprotocol.responders.IBarcodeReceivedDelegate;
 import com.uk.tsl.rfid.asciiprotocol.responders.ITransponderReceivedDelegate;
 import com.uk.tsl.rfid.asciiprotocol.responders.TransponderData;
+import com.uk.tsl.rfid.asciiprotocol.device.ConnectionState;
+import com.uk.tsl.rfid.asciiprotocol.device.ObservableReaderList;
+import com.uk.tsl.rfid.asciiprotocol.responders.LoggerResponder;
+import com.uk.tsl.utils.Observable;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -36,6 +45,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
@@ -56,6 +66,9 @@ public class TSLScannerDevice implements ScannerDevice {
     private static final String DEVICE_IS_NOT_CONNECTED = "Device is not connected.";
     private static AsciiCommander commander;
     private CordovaPlugin rfidConnector;
+    // The Reader currently in use
+    private Reader mReader = null;
+
     final Context context;
     private static CallbackContext dataAvailableCallback;
     private static InventoryCommand mInventoryCommand;
@@ -72,8 +85,147 @@ public class TSLScannerDevice implements ScannerDevice {
         this.rfidConnector = rfidConnector;
         this.context = rfidConnector.cordova.getActivity().getBaseContext();
         this.commander = getCommander();
+
+        // Add responder to enable the synchronous commands
+        commander.addSynchronousResponder();
+
+        // Configure the ReaderManager when necessary
+        ReaderManager.create(rfidConnector.cordova.getActivity().getApplicationContext());
+
+        ReaderManager.sharedInstance().getReaderList().list();
+
+        // Add observers for changes
+        ReaderManager.sharedInstance().getReaderList().readerAddedEvent().addObserver(mAddedObserver);
+        ReaderManager.sharedInstance().getReaderList().readerUpdatedEvent().addObserver(mUpdatedObserver);
+        ReaderManager.sharedInstance().getReaderList().readerRemovedEvent().addObserver(mRemovedObserver);
+
         mInventoryCommand = getInventoryInstance();
+        try {
+            ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list(); 
+            if(mReaders != null && !mReaders.isEmpty()){
+                mReader = mReaders.get(0);
+            }
+        } catch (Exception e) {
+            //TODO: handle exception
+        }
+        
     }
+
+    //
+    // Select the Reader to use and reconnect to it as needed
+    //
+    private void AutoSelectReader(boolean attemptReconnect)
+    {
+        ObservableReaderList readerList = ReaderManager.sharedInstance().getReaderList();
+        Reader usbReader = null;
+        if( readerList.list().size() >= 1)
+        {
+            // Currently only support a single USB connected device so we can safely take the
+            // first CONNECTED reader if there is one
+            for (Reader reader : readerList.list())
+            {
+                if (reader.hasTransportOfType(TransportType.USB))
+                {
+                    usbReader = reader;
+                    break;
+                }
+            }
+        }
+
+        if( mReader == null )
+        {
+            if( usbReader != null )
+            {
+                // Use the Reader found, if any
+                mReader = usbReader;
+                getCommander().setReader(mReader);
+            }
+        }
+        else
+        {
+            // If already connected to a Reader by anything other than USB then
+            // switch to the USB Reader
+            IAsciiTransport activeTransport = mReader.getActiveTransport();
+            if ( activeTransport != null && activeTransport.type() != TransportType.USB && usbReader != null)
+            {
+                Log.d("", "Disconnecting from: " + mReader.getDisplayName() + "\n");
+                if( mReader != null )
+                {
+                    mReader.disconnect();
+                    // Explicitly clear the Reader as we are finished with it
+                    mReader = null;
+                }
+                
+
+                mReader = usbReader;
+
+                // Use the Reader found, if any
+                getCommander().setReader(mReader);
+            }
+        }
+
+        // Reconnect to the chosen Reader
+        if( mReader != null
+                && !mReader.isConnecting()
+                && (mReader.getActiveTransport()== null || mReader.getActiveTransport().connectionStatus().value() == ConnectionState.DISCONNECTED))
+        {
+            // Attempt to reconnect on the last used transport unless the ReaderManager is cause of OnPause (USB device connecting)
+            if( attemptReconnect )
+            {
+                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+                {
+                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+                    if( mReader.connect() )
+                    {
+                        Log.d("", "Connecting to: " + mReader.getDisplayName() +"\n");
+                    }
+                }
+                else
+                {
+                    // Reader supports only a single active transport so connect to it over the transport that was last in use
+                    if( mReader.connect(mReader.getLastTransportType()) )
+                    {
+                        Log.d("", "Connecting (over last transport) to: " + mReader.getDisplayName() +"\n");
+                    }
+                }
+            }
+        }
+    }
+
+     // ReaderList Observers
+     Observable.Observer<Reader> mAddedObserver = new Observable.Observer<Reader>()
+     {
+         @Override
+         public void update(Observable<? extends Reader> observable, Reader reader)
+         {
+             // See if this newly added Reader should be used
+             AutoSelectReader(true);
+         }
+     };
+ 
+     Observable.Observer<Reader> mUpdatedObserver = new Observable.Observer<Reader>()
+     {
+         @Override
+         public void update(Observable<? extends Reader> observable, Reader reader)
+         {
+         }
+     };
+ 
+     Observable.Observer<Reader> mRemovedObserver = new Observable.Observer<Reader>()
+     {
+         @Override
+         public void update(Observable<? extends Reader> observable, Reader reader)
+         {
+             // Was the current Reader removed
+             if( reader == mReader)
+             {
+                 mReader = null;
+ 
+                 // Stop using the old Reader
+                 getCommander().setReader(mReader);
+             }
+         }
+     };
 
     public AsciiCommander getCommander() {
         if (commander == null) {
@@ -102,7 +254,12 @@ public class TSLScannerDevice implements ScannerDevice {
                                             || versionInfoCommand.getManufacturer()
                                                                  .toString()
                                                                  .contains("Technology Solutions"))) {
-                                        commander.disconnect();
+                                        //commander.disconnect();
+                                        if( mReader != null ) {
+                                            mReader.disconnect();
+                                            // Explicitly clear the Reader as we are finished with it
+                                            mReader = null;
+                                        }
                                         connectCallback.error("Not a recognised device!");
                                     }else{
                                         InventoryCommand inventoryCommand = getInventoryInstance();
@@ -157,7 +314,33 @@ public class TSLScannerDevice implements ScannerDevice {
                         for (BluetoothDevice device : listOfBondedDevices) {
                             if (deviceID.equals(device.getAddress()) || deviceID.equals(device.getName())) {
                                 BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(device.getAddress());
-                                commander.connect(bluetoothDevice);
+                                //commander.connect(bluetoothDevice);
+                                try {
+                                    ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list(); 
+                                    if(mReaders != null && !mReaders.isEmpty()){
+                                        for (Reader listReader : mReaders) {
+                                           if(listReader.getSerialNumber().equals(deviceID))
+                                           {
+                                                mReader = listReader;
+                                                getCommander().setReader(mReader);
+                                                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+                                                {
+                                                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+                                                    mReader.connect();
+                                                }
+                                                else
+                                                {
+                                                    // Reader supports only a single active transport so connect to it over the transport that was last in use
+                                                    mReader.connect(mReader.getLastTransportType());
+                                                }
+                                                break;
+                                           }
+                                        }
+
+                                    }
+                                } catch (Exception e) {
+                                    //TODO: handle exception
+                                }
                                 // printResponders(callbackContext, "After connect");
 
                                 // PluginResult pluginResult = new
@@ -209,7 +392,12 @@ public class TSLScannerDevice implements ScannerDevice {
             inventoryResponder = null;
             barcodeResponder = null;
             dataAvailableCallback = null;
-            commander.disconnect();
+            // commander.disconnect();
+            if( mReader != null ) {
+                mReader.disconnect();
+                // Explicitly clear the Reader as we are finished with it
+                mReader = null;
+            }
         }
 
         // PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, "Trying to
