@@ -305,53 +305,85 @@ public class TSLScannerDevice implements ScannerDevice {
                     if (commander.isConnected()) {
                         callbackContext.error(DEVICE_IS_ALREADY_CONNECTED);
                     } else {
-                        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(context.BLUETOOTH_SERVICE);
-                        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
-
-                        Boolean status = bluetoothAdapter.startDiscovery();
-                        Set<BluetoothDevice> listOfBondedDevices = bluetoothAdapter.getBondedDevices();
-
-                        for (BluetoothDevice device : listOfBondedDevices) {
-                            if (deviceID.equals(device.getAddress()) || deviceID.equals(device.getName())) {
-                                BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(device.getAddress());
-                                //commander.connect(bluetoothDevice);
-                                try {
-                                    ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list(); 
-                                    if(mReaders != null && !mReaders.isEmpty()){
-                                        for (Reader listReader : mReaders) {
-                                           if(listReader.getSerialNumber().equals(deviceID))
-                                           {
-                                                mReader = listReader;
-                                                getCommander().setReader(mReader);
-                                                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
-                                                {
-                                                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
-                                                    mReader.connect();
-                                                }
-                                                else
-                                                {
-                                                    // Reader supports only a single active transport so connect to it over the transport that was last in use
-                                                    mReader.connect(mReader.getLastTransportType());
-                                                }
-                                                break;
-                                           }
+                        try {
+                            ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list();
+                            if(mReaders != null && !mReaders.isEmpty()){
+                                for (Reader listReader : mReaders) {
+                                    Log.d("", "Serial Number: " + listReader.getSerialNumber() + "\n");
+                                    Log.d("", "Display Name: " + listReader.getDisplayName() + "\n");
+                                    if(listReader.getSerialNumber().equals(deviceID))
+                                    {
+                                        mReader = listReader;
+                                        getCommander().setReader(mReader);
+                                        if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+                                        {
+                                            // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+                                            mReader.connect();
+                                            Log.d("", "Connected: " + mReader.getDisplayName() + "\n");
                                         }
-
+                                        else
+                                        {
+                                            // Reader supports only a single active transport so connect to it over the transport that was last in use
+                                            mReader.connect(mReader.getLastTransportType());
+                                            Log.d("", "Connected: " + mReader.getDisplayName() + "\n");
+                                        }
+                                        callbackContext.success("true");
+                                        return;
                                     }
-                                } catch (Exception e) {
-                                    //TODO: handle exception
                                 }
-                                // printResponders(callbackContext, "After connect");
 
-                                // PluginResult pluginResult = new
-                                // PluginResult(PluginResult.Status.OK,
-                                // "Trying to connect " + deviceID + "(" + bluetoothDevice.getName()
-                                // + ")");
-                                // pluginResult.setKeepCallback(true);
-                                // callbackContext.sendPluginResult(pluginResult);
-                                return;
                             }
+                        } catch (Exception e) {
+                            Log.d("", "Error: " + e.getMessage() + "\n");
                         }
+
+//                        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(context.BLUETOOTH_SERVICE);
+//                        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+//
+//                        Boolean status = bluetoothAdapter.startDiscovery();
+//                        Set<BluetoothDevice> listOfBondedDevices = bluetoothAdapter.getBondedDevices();
+
+//                        for (BluetoothDevice device : listOfBondedDevices) {
+//                            if (deviceID.equals(device.getAddress()) || deviceID.equals(device.getName())) {
+//                                BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(device.getAddress());
+//                                //commander.connect(bluetoothDevice);
+//                                try {
+//                                    ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list();
+//                                    if(mReaders != null && !mReaders.isEmpty()){
+//                                        for (Reader listReader : mReaders) {
+//                                           if(listReader.getSerialNumber().equals(deviceID))
+//                                           {
+//                                                mReader = listReader;
+//                                                getCommander().setReader(mReader);
+//                                                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+//                                                {
+//                                                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+//                                                    mReader.connect();
+//                                                }
+//                                                else
+//                                                {
+//                                                    // Reader supports only a single active transport so connect to it over the transport that was last in use
+//                                                    mReader.connect(mReader.getLastTransportType());
+//                                                }
+//                                                break;
+//                                           }
+//                                        }
+//
+//                                    }
+//                                } catch (Exception e) {
+//                                    //TODO: handle exception
+//                                }
+//                                // printResponders(callbackContext, "After connect");
+//
+//                                // PluginResult pluginResult = new
+//                                // PluginResult(PluginResult.Status.OK,
+//                                // "Trying to connect " + deviceID + "(" + bluetoothDevice.getName()
+//                                // + ")");
+//                                // pluginResult.setKeepCallback(true);
+//                                // callbackContext.sendPluginResult(pluginResult);
+//                                return;
+//                            }
+//                        }
                         callbackContext.error("Device not found " + deviceID);
                     }
                 } else {
