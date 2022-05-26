@@ -1,12 +1,12 @@
 package cordova.plugin.rfidconnector;
 
+import org.apache.cordova.*;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.lang.ref.WeakReference;
 
-import org.apache.cordova.CallbackContext;
-import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -33,6 +33,7 @@ import com.uk.tsl.rfid.asciiprotocol.responders.ITransponderReceivedDelegate;
 import com.uk.tsl.rfid.asciiprotocol.responders.TransponderData;
 import com.uk.tsl.rfid.asciiprotocol.device.ConnectionState;
 import com.uk.tsl.rfid.asciiprotocol.responders.LoggerResponder;
+import com.uk.tsl.rfid.asciiprotocol.parameters.AntennaParameters;
 import com.uk.tsl.utils.Observable;
 
 import android.bluetooth.BluetoothAdapter;
@@ -69,6 +70,12 @@ public class TSLScannerDevice implements ScannerDevice {
     private Reader mReader = null;
     private ObservableReaderList mReaders;
 
+    // The current setting of the power level
+    private int mPowerLevel = AntennaParameters.MaximumCarrierPower;
+
+    private boolean isInventoryRunning = false;
+    private boolean isTriggeredInventory = false;
+
     final Context context;
     private static CallbackContext dataAvailableCallback;
     private static InventoryCommand mInventoryCommand;
@@ -80,43 +87,54 @@ public class TSLScannerDevice implements ScannerDevice {
     private static CallbackContext connectCallback;
     private static CallbackContext disconnectCallback;
 
+    private GenericHandler mGenericModelHandler;
 
+    private CallbackContext mConnectCallbackContext = null;
+    private CallbackContext mScanCallbackContext = null;
+    private CallbackContext mStatusCallbackContext = null;
+    private CallbackContext mWriteCallbackContext = null;
+
+
+    private Collector collector;
+    
     public TSLScannerDevice(final CordovaPlugin rfidConnector) {
         this.rfidConnector = rfidConnector;
+
+
 
         this.context = rfidConnector.cordova.getActivity().getBaseContext();
         // Ensure the shared instance of AsciiCommander exists
         //this.commander = AsciiCommander.createSharedInstance(rfidConnector.cordova.getActivity().getApplicationContext());
-        AsciiCommander.createSharedInstance(rfidConnector.cordova.getContext());
 
-        this.commander = getCommander();
+
+        //this.commander = getCommander();
         //this.commander = getCommander();
 
         // Add responder to enable the synchronous commands
-        commander.addSynchronousResponder();
+        //commander.addSynchronousResponder();
 
         // Configure the ReaderManager when necessary
-        ReaderManager.create(rfidConnector.cordova.getContext());
+        //ReaderManager.create(rfidConnector.cordova.getContext());
 
 
 
         //ReaderManager.sharedInstance().getReaderList().list();
-        try {
-            ReaderManager.sharedInstance().initialiseList();
-            mReaders = ReaderManager.sharedInstance().getReaderList();
-            //mReaders = ReaderManager.sharedInstance().getReaderList().list();
-            //if(mReaders != null && !mReaders.isEmpty()){
-            //    mReader = mReaders.get(0);
-            //}
-        } catch (Exception e) {
-            //TODO: handle exception
-        }
-        // Add observers for changes
-        ReaderManager.sharedInstance().getReaderList().readerAddedEvent().addObserver(mAddedObserver);
-        ReaderManager.sharedInstance().getReaderList().readerUpdatedEvent().addObserver(mUpdatedObserver);
-        ReaderManager.sharedInstance().getReaderList().readerRemovedEvent().addObserver(mRemovedObserver);
-
-        mInventoryCommand = getInventoryInstance();
+//        try {
+//            ReaderManager.sharedInstance().initialiseList();
+//            mReaders = ReaderManager.sharedInstance().getReaderList();
+//            //mReaders = ReaderManager.sharedInstance().getReaderList().list();
+//            //if(mReaders != null && !mReaders.isEmpty()){
+//            //    mReader = mReaders.get(0);
+//            //}
+//        } catch (Exception e) {
+//            //TODO: handle exception
+//        }
+//        // Add observers for changes
+//        ReaderManager.sharedInstance().getReaderList().readerAddedEvent().addObserver(mAddedObserver);
+//        ReaderManager.sharedInstance().getReaderList().readerUpdatedEvent().addObserver(mUpdatedObserver);
+//        ReaderManager.sharedInstance().getReaderList().readerRemovedEvent().addObserver(mRemovedObserver);
+//
+//        mInventoryCommand = getInventoryInstance();
         // See if there is a reader currently in use
         //Intent intent = rfidConnector.cordova.getActivity().getIntent();
         //int startIndex = intent.getIntExtra("tsl_device_index", -1);
@@ -138,6 +156,155 @@ public class TSLScannerDevice implements ScannerDevice {
 
     }
 
+    @Override
+    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+        // https://cordova.apache.org/docs/en/latest/guide/platforms/android/plugin.html#plugin-initialization-and-lifetime
+        Log.i("CordovaLog", "initialize() was called");
+        super.initialize(cordova, webView);
+
+        onCreate();
+    }
+
+    //@Override
+    public void onCreate() {
+
+        //super.onCreate();
+        Log.i("CordovaLog", "onCreate() was called");
+        //super.onCreate(savedInstanceState);
+
+        mGenericModelHandler = new GenericHandler(this.cordova.getActivity());
+
+        // Ensure the shared instance of AsciiCommander exists
+        AsciiCommander.createSharedInstance(getApplicationContext());
+        //AsciiCommander.createSharedInstance(rfidConnector.cordova.getContext());
+        final AsciiCommander commander = getCommander();
+
+        // Ensure that all existing responders are removed
+        commander.clearResponders();
+
+        // Add the LoggerResponder - this simply echoes all lines received from the reader to the log
+        // and passes the line onto the next responder
+        // This is ADDED FIRST so that no other responder can consume received lines before they are logged.
+        commander.addResponder(new LoggerResponder());
+
+        //
+        // Add a simple Responder that sends the Reader output to the App message list
+        //
+        // Note - This is not the recommended way of receiving Reader input - it is just a convenient
+        // way to show that the Reader is connected and communicating - see the other Sample Projects
+        // for how to Inventory, Read, Write etc....
+        //
+        /*
+        commander.addResponder(new IAsciiCommandResponder() {
+            @Override
+            public boolean isResponseFinished() { return false; }
+
+            @Override
+            public void clearLastResponse() {}
+
+            @Override
+            public boolean processReceivedLine(String fullLine, boolean moreLinesAvailable)
+            {
+                logMessage(">>> " + fullLine);
+                // don't consume the line - allow others to receive it
+                return false;
+            }
+        });
+        */
+
+        // Add responder to enable the synchronous commands
+        commander.addSynchronousResponder();
+
+        // Configure the ReaderManager when necessary
+        ReaderManager.create(getApplicationContext());
+
+        // Add observers for changes
+        ReaderManager.sharedInstance().getReaderList().readerAddedEvent().addObserver(mAddedObserver);
+        ReaderManager.sharedInstance().getReaderList().readerUpdatedEvent().addObserver(mUpdatedObserver);
+        ReaderManager.sharedInstance().getReaderList().readerRemovedEvent().addObserver(mRemovedObserver);
+
+        //setModels();
+
+        ReaderManager.sharedInstance().updateList();
+
+        autoSelectReader(true);
+
+        //onCreateForEDA51();
+    }
+
+    private void onResumeTask(){
+        // Register to receive notifications from the AsciiCommander
+        LocalBroadcastManager.getInstance(this.cordova.getActivity()).registerReceiver(mMessageReceiver, new IntentFilter(AsciiCommander.STATE_CHANGED_NOTIFICATION));
+
+
+        // Remember if the pause/resume was caused by ReaderManager - this will be cleared when ReaderManager.onResume() is called
+        boolean readerManagerDidCauseOnPause = ReaderManager.sharedInstance().didCauseOnPause();
+
+        // The ReaderManager needs to know about Activity lifecycle changes
+        ReaderManager.sharedInstance().onResume();
+
+        // The Activity may start with a reader already connected (perhaps by another App)
+        // Update the ReaderList which will add any unknown reader, firing events appropriately
+        ReaderManager.sharedInstance().updateList();
+
+        // Reconnect to the Reader in use (locate a Reader to use when necessary)
+        autoSelectReader(!readerManagerDidCauseOnPause);
+
+        //mIsSelectingReader = false;
+    }
+
+    @Override
+    public void onPause(boolean multitasking) {
+
+
+        logMessage("Pausing...");
+
+        // Register to receive notifications from the AsciiCommander
+        LocalBroadcastManager.getInstance(this.cordova.getActivity()).unregisterReceiver(mMessageReceiver);
+
+        // Disconnect from the reader to allow other Apps to use it
+        // unless pausing when USB device attached or using the DeviceListActivity to select a Reader
+        if(!ReaderManager.sharedInstance().didCauseOnPause() && mReader != null )
+        {
+            mReader.disconnect();
+            onDisconnect();
+        }
+
+        ReaderManager.sharedInstance().onPause();
+
+        if (this.collector != null){
+            this.collector.onPause();
+        }
+
+    }
+
+    @Override
+    public void onDestroy()
+    {
+        logMessage("onDestroy");
+        //super.onDestroy();
+
+        // Remove observers for changes
+        ReaderManager.sharedInstance().getReaderList().readerAddedEvent().removeObserver(mAddedObserver);
+        ReaderManager.sharedInstance().getReaderList().readerUpdatedEvent().removeObserver(mUpdatedObserver);
+        ReaderManager.sharedInstance().getReaderList().readerRemovedEvent().removeObserver(mRemovedObserver);
+
+        if (this.collector != null){
+            this.collector.onDestroy();
+            this.collector = null;
+        }
+
+    }
+
+    private Context getApplicationContext(){
+        return this.cordova.getActivity().getApplicationContext();
+    }
+
+    private void handleException(Exception ex, String caller, CallbackContext callbackContext) {
+        Log.e("CordovaLog", "Exception: ", ex);
+        callbackContext.error("ERROR " + caller + ". Exception: " + ex.getMessage());
+
+    }
     //
     // Select the Reader to use and reconnect to it as needed
     //
@@ -991,5 +1158,88 @@ public class TSLScannerDevice implements ScannerDevice {
             pluginResult.setKeepCallback(true);
             callbackContext.sendPluginResult(pluginResult);
         }
+    }
+
+    //----------------------------------------------------------------------------------------------
+    // Model notifications
+    //----------------------------------------------------------------------------------------------
+
+    private class GenericHandler extends WeakHandler<Activity>
+    {
+        public GenericHandler(Activity t)
+        {
+            super(t);
+        }
+
+        @Override
+        public void handleMessage(Message msg, Activity t)
+        {
+            Log.d("CordovaLog", "handling message @GenericHandler");
+            try {
+                switch (msg.what) {
+                    case ModelBase.BUSY_STATE_CHANGED_NOTIFICATION:
+                        //TODO: process change in model busy state
+                        break;
+
+                    case ModelBase.MESSAGE_NOTIFICATION:
+                        // Examine the message for prefix
+                        String message = (String)msg.obj;
+
+                        if( message.startsWith("ER:")) {
+                            Log.d("CordovaLog","message.obj.substring(3) : "+message.substring(3));
+                        }
+                        else if( message.startsWith("BC:")) {
+                            Log.d("CordovaLog","message.obj: "+message);
+
+                        } else {
+                            Log.d("CordovaLog","message.obj: "+message);
+                            if (isInventoryRunning){
+                                //notify cordova after first scan
+                                if (isTriggeredInventory && message.indexOf("TagCount")>=0){
+                                    sendOkToCallbackAndKeep(dataAvailableCallback);
+                                }else{
+                                    processReadRFID(message);
+                                }
+                            }else if (mWriteCallbackContext != null){
+                                if (message.contains("WriteTransponderCommand failed")){ //TODO replace it and use a Error code (see API)
+                                    mWriteCallbackContext.error(message);
+                                }
+                                if (message.contains("Words Written: 6 of 6")){ //TODO replace it and use a OK code (see API)
+                                    logMessage("writeTag without Exception :-)");
+                                    mWriteCallbackContext.success("Ok");
+                                }
+                            }
+                        }
+
+                        break;
+
+                    default:
+                        Log.d("CordovaLog", "message: "+msg);
+                        break;
+                }
+            } catch (Exception e) {
+            }
+
+        }
+    };
+
+    private void sendMessageAndKeepCallback(String message, CallbackContext _callbackContext){
+        try{
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("data", message);
+            PluginResult presult = new PluginResult(PluginResult.Status.OK, jsonObject);
+            presult.setKeepCallback(true);
+            if (_callbackContext != null){
+                _callbackContext.sendPluginResult(presult);
+            }
+        }catch(Exception ex) {
+            Log.i("CordovaLog", "Exception: ", ex);
+            handleException(ex, "sendMessageAndKeepCallback", _callbackContext);
+        }
+    }
+
+    private void onCreateForEDA51(){
+        this.collector = new Collector(this.cordova.getActivity());
+        this.collector.onCreate();
     }
 }
