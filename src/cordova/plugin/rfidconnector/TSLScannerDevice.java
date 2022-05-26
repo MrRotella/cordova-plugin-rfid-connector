@@ -270,6 +270,23 @@ public class TSLScannerDevice implements ScannerDevice {
         @Override
         public void onReceive(Context context, Intent intent) {
 
+            Log.d(getClass().getName(), "AsciiCommander state changed - isConnected: " + getCommander().isConnected());
+
+            String connectionStateMsg = intent.getStringExtra(AsciiCommander.REASON_KEY);
+            Log.d(getClass().getName(), "AsciiCommander state changed - connectionStateMsg : " + connectionStateMsg);
+
+//            if( getCommander().isConnected() )
+//            {
+//                // Update for any change in power limits
+//                setPowerBarLimits();
+//                // This may have changed the current power level setting if the new range is smaller than the old range
+//                // so update the model's inventory command for the new power value
+//                mModel.getCommand().setOutputPower(mPowerLevel);
+//
+//                mModel.resetDevice();
+//                mModel.updateConfiguration();
+//            }
+
             switch (commander.getConnectionState()) {
                 case CONNECTED:
                     if (connectCallback != null) {
@@ -284,11 +301,11 @@ public class TSLScannerDevice implements ScannerDevice {
                                     .toString()
                                     .contains("Technology Solutions"))) {
                                 //commander.disconnect();
-                                if( mReader != null ) {
-                                    mReader.disconnect();
+                                //if( mReader != null ) {
+                                //    mReader.disconnect();
                                     // Explicitly clear the Reader as we are finished with it
-                                    mReader = null;
-                                }
+                                //    mReader = null;
+                               // }
                                 connectCallback.error("Not a recognised device!");
                             }else{
                                 InventoryCommand inventoryCommand = getInventoryInstance();
@@ -296,7 +313,7 @@ public class TSLScannerDevice implements ScannerDevice {
                                 commander.executeCommand(inventoryCommand);
                                 removeSyncAndAddAsyncResponder();
                                 connectCallback.success("true");
-                                connectCallback = null;
+                                //connectCallback = null;
                             }
 
                         }else{
@@ -307,7 +324,7 @@ public class TSLScannerDevice implements ScannerDevice {
                 case DISCONNECTED:
                     if (connectCallback != null) {
                         connectCallback.error(commander.getConnectionState().name());
-                        connectCallback = null;
+                        //connectCallback = null;
                     }
                     if (disconnectCallback != null) {
                         disconnectCallback.success("true");
@@ -539,7 +556,7 @@ public class TSLScannerDevice implements ScannerDevice {
                         // callbackContext.sendPluginResult(pluginResult);
                         try {
                             String epc = transponder.getEpc();
-                            
+
 //                            if (useAscii) {
 //                                epc = ConversionUtil.hexToAscii(epc);
 //                            }
