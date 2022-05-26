@@ -255,10 +255,12 @@ public class TSLScannerDevice implements ScannerDevice {
     };
 
     public AsciiCommander getCommander() {
-        if (commander == null) {
-            commander = new AsciiCommander(context);
-        }
-        return commander;
+        return AsciiCommander.sharedInstance();
+
+//        if (commander == null) {
+//            commander = new AsciiCommander(context);
+//        }
+//        return commander;
     }
 
     //
