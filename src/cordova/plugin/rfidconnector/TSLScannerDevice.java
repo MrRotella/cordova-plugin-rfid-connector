@@ -573,8 +573,8 @@ public class TSLScannerDevice implements ScannerDevice {
                     mReader.connect();
                     commander.setReader(mReader);
                 }
-                if(mReader != null && mReadersCurrent.list().size() >= 1){
-                    mReader = mReadersCurrent.list().get(0);
+                if(mReader == null && ReaderManager.sharedInstance().getReaderList().list().size() >= 1){
+                    mReader = ReaderManager.sharedInstance().getReaderList().list().get(0);
                     mReader.connect();
                     commander.setReader(mReader);
                 }
