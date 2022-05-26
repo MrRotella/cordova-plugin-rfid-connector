@@ -235,6 +235,29 @@ public class TSLScannerDevice implements ScannerDevice {
         @Override
         public void update(Observable<? extends Reader> observable, Reader reader)
         {
+//            // Is this a change to the last actively disconnected reader
+//            if( reader == mLastUserDisconnectedReader )
+//            {
+//                // Things have changed since it was actively disconnected so
+//                // treat it as new
+//                mLastUserDisconnectedReader = null;
+//            }
+
+            // Was the current Reader disconnected i.e. the connected transport went away or disconnected
+            if( reader == mReader && !reader.isConnected() )
+            {
+                // No longer using this reader
+                mReader = null;
+
+                // Stop using the old Reader
+                getCommander().setReader(mReader);
+            }
+            else
+            {
+                // See if this updated Reader should be used
+                // e.g. the Reader's USB transport connected
+                AutoSelectReader(true);
+            }
         }
     };
 
@@ -370,6 +393,7 @@ public class TSLScannerDevice implements ScannerDevice {
                                         //{
                                         mReader = listReader;
                                         getCommander().setReader(mReader);
+                                        commander.setReader(mReader);
                                         if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
                                         {
                                             // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
@@ -540,6 +564,16 @@ public class TSLScannerDevice implements ScannerDevice {
         // printResponders(callbackContext, "Before scanRFIDs");
         try {
             removeAsyncAndAddSyncResponder();
+            if(!getCommander().isConnected()) {
+                // The Activity may start with a reader already connected (perhaps by another App)
+                // Update the ReaderList which will add any unknown reader, firing events appropriately
+                ReaderManager.sharedInstance().updateList();
+                if(mReader != null && !mReader.isConnected())
+                {
+                    mReader.connect();
+                    commander.setReader(mReader);
+                }
+            }
             if (commander.isConnected()) {
                 final JSONArray data = new JSONArray();
 
