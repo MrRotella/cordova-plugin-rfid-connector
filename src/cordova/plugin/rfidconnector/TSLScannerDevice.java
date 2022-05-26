@@ -573,6 +573,12 @@ public class TSLScannerDevice implements ScannerDevice {
                     mReader.connect();
                     commander.setReader(mReader);
                 }
+                if(mReader != null && mReadersCurrent.list().size() >= 1){
+                    mReader = mReadersCurrent.list().get(0);
+                    mReader.connect();
+                    commander.setReader(mReader);
+                }
+
             }
             if (commander.isConnected()) {
                 final JSONArray data = new JSONArray();
