@@ -539,9 +539,10 @@ public class TSLScannerDevice implements ScannerDevice {
                         // callbackContext.sendPluginResult(pluginResult);
                         try {
                             String epc = transponder.getEpc();
-                            if (useAscii) {
-                                epc = ConversionUtil.hexToAscii(epc);
-                            }
+                            
+//                            if (useAscii) {
+//                                epc = ConversionUtil.hexToAscii(epc);
+//                            }
 
                             data.put(JSONUtil.createRFIDJSONObject(epc, transponder.getRssi()));
                         } catch (JSONException ex) {
