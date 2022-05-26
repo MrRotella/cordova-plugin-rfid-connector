@@ -96,7 +96,7 @@ public class TSLScannerDevice implements ScannerDevice {
 
 
     private Collector collector;
-    
+
     public TSLScannerDevice(final CordovaPlugin rfidConnector) {
         this.rfidConnector = rfidConnector;
 
