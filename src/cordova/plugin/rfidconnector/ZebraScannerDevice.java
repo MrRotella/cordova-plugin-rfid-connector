@@ -30,7 +30,7 @@ import android.os.Looper;
 import android.widget.Toast;
 
 
-public class ZebraScannerDevice implements ScannerDevice {
+public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerDevice {
     private static final String BARCODE_SCANNER_CONNECTION_ERROR = "Barcode Scanner Connection Failed!";
     private static final String BATTERY_STATUS = "batteryStatus";
     private static final String BATTERY_LEVEL = "batteryLevel";
@@ -144,7 +144,7 @@ public class ZebraScannerDevice implements ScannerDevice {
                 deviceName = null;
             } catch (OperationFailureException e) {
                 callbackContext.error("Please check, if device bluetooth is ON." + e.getResults().toString() + " : " + e.getStatusDescription()
-                                + " : " + e.getVendorMessage());
+                        + " : " + e.getVendorMessage());
                 rfidReader = null;
                 readerDevice = null;
                 deviceName = null;
@@ -244,7 +244,7 @@ public class ZebraScannerDevice implements ScannerDevice {
                         deviceInfo.put(SERIAL_NUMBER, serialNumber == null ? " " : serialNumber);
                         deviceInfo.put(ANTENNA_MIN, transmitPowerLevelValues == null ? " " : transmitPowerLevelValues[0]);
                         deviceInfo.put(ANTENNA_MAX,
-                            transmitPowerLevelValues == null ? " " : transmitPowerLevelValues[transmitPowerLevelValues.length - 1]);
+                                transmitPowerLevelValues == null ? " " : transmitPowerLevelValues[transmitPowerLevelValues.length - 1]);
                         deviceInfo.put(SCAN_POWER, transmitPowerIndexRF);
                         resultObject.put("deviceInfo", deviceInfo);
                         rfidReader.Events.removeEventsListener(event);
@@ -382,7 +382,7 @@ public class ZebraScannerDevice implements ScannerDevice {
             int[] transmitPowerLevelValues = rfidReader.ReaderCapabilities.getTransmitPowerLevelValues();
             if (transmitPowerLevelValues[0] > power || transmitPowerLevelValues[transmitPowerLevelValues.length - 1] < power) {
                 callbackContext.error("Power is only allowed between " + transmitPowerLevelValues[0] + " - "
-                                + transmitPowerLevelValues[transmitPowerLevelValues.length - 1]);
+                        + transmitPowerLevelValues[transmitPowerLevelValues.length - 1]);
                 return;
             }
             try {
@@ -450,10 +450,10 @@ public class ZebraScannerDevice implements ScannerDevice {
                 sdkHandler.dcssdkSetOperationalMode(DCSSDKDefs.DCSSDK_MODE.DCSSDK_OPMODE_BT_LE);
                 // We would like to subscribe to all scanner available/not-available events
                 int notifications_mask = DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_APPEARANCE.value
-                                | DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_DISAPPEARANCE.value;
+                        | DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_DISAPPEARANCE.value;
                 // We would like to subscribe to all scanner connection events
                 notifications_mask |= DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_ESTABLISHMENT.value
-                                | DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_TERMINATION.value;
+                        | DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_TERMINATION.value;
                 // We would like to subscribe to all barcode events
                 notifications_mask |= DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_BARCODE.value;
                 // subscribe to events set in notification mask
@@ -563,6 +563,21 @@ public class ZebraScannerDevice implements ScannerDevice {
             rfidReader.Events.setBatteryEvent(false);
         }
         callbackContext.success("true");
+    }
+
+    @Override
+    public void onPause() {
+
+    }
+
+    @Override
+    public void onResume() {
+
+    }
+
+    @Override
+    public void onDestroy() {
+
     }
 
     public static boolean removeEventHandler() {

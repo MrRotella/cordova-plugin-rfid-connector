@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.lang.ref.WeakReference;
+import java.util.stream.Collector;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -45,11 +46,13 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.Looper;
+import android.app.Activity;
+import android.os.Message;
 import android.util.Log;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 
-public class TSLScannerDevice implements ScannerDevice {
+public class TSLScannerDevice implements cordova.plugin.rfidconnector.ScannerDevice {
 
     private static final String ERROR_LABEL = "Error: ";
     private static final String DEVICE_IS_ALREADY_CONNECTED = "Device is already connected.";
@@ -103,6 +106,8 @@ public class TSLScannerDevice implements ScannerDevice {
 
 
         this.context = rfidConnector.cordova.getActivity().getBaseContext();
+
+        onCreate();
         // Ensure the shared instance of AsciiCommander exists
         //this.commander = AsciiCommander.createSharedInstance(rfidConnector.cordova.getActivity().getApplicationContext());
 
@@ -156,14 +161,14 @@ public class TSLScannerDevice implements ScannerDevice {
 
     }
 
-    @Override
-    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
-        // https://cordova.apache.org/docs/en/latest/guide/platforms/android/plugin.html#plugin-initialization-and-lifetime
-        Log.i("CordovaLog", "initialize() was called");
-        super.initialize(cordova, webView);
-
-        onCreate();
-    }
+//    @Override
+//    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+//        // https://cordova.apache.org/docs/en/latest/guide/platforms/android/plugin.html#plugin-initialization-and-lifetime
+//        Log.i("CordovaLog", "initialize() was called");
+//        super.initialize(cordova, webView);
+//
+//        onCreate();
+//    }
 
     //@Override
     public void onCreate() {
@@ -172,7 +177,7 @@ public class TSLScannerDevice implements ScannerDevice {
         Log.i("CordovaLog", "onCreate() was called");
         //super.onCreate(savedInstanceState);
 
-        mGenericModelHandler = new GenericHandler(this.cordova.getActivity());
+        mGenericModelHandler = new GenericHandler(this.rfidConnector.cordova.getActivity());
 
         // Ensure the shared instance of AsciiCommander exists
         AsciiCommander.createSharedInstance(getApplicationContext());
@@ -227,14 +232,16 @@ public class TSLScannerDevice implements ScannerDevice {
 
         ReaderManager.sharedInstance().updateList();
 
-        autoSelectReader(true);
+        AutoSelectReader(true);
 
         //onCreateForEDA51();
     }
 
+
+
     private void onResumeTask(){
         // Register to receive notifications from the AsciiCommander
-        LocalBroadcastManager.getInstance(this.cordova.getActivity()).registerReceiver(mMessageReceiver, new IntentFilter(AsciiCommander.STATE_CHANGED_NOTIFICATION));
+        LocalBroadcastManager.getInstance(this.rfidConnector.cordova.getActivity()).registerReceiver(mCommanderMessageReceiver, new IntentFilter(AsciiCommander.STATE_CHANGED_NOTIFICATION));
 
 
         // Remember if the pause/resume was caused by ReaderManager - this will be cleared when ReaderManager.onResume() is called
@@ -248,40 +255,40 @@ public class TSLScannerDevice implements ScannerDevice {
         ReaderManager.sharedInstance().updateList();
 
         // Reconnect to the Reader in use (locate a Reader to use when necessary)
-        autoSelectReader(!readerManagerDidCauseOnPause);
+        AutoSelectReader(!readerManagerDidCauseOnPause);
 
         //mIsSelectingReader = false;
     }
 
-    @Override
+    //@Override
     public void onPause(boolean multitasking) {
 
 
-        logMessage("Pausing...");
+        Log.d("","Pausing...");
 
         // Register to receive notifications from the AsciiCommander
-        LocalBroadcastManager.getInstance(this.cordova.getActivity()).unregisterReceiver(mMessageReceiver);
+        LocalBroadcastManager.getInstance(this.rfidConnector.cordova.getActivity()).unregisterReceiver(mCommanderMessageReceiver);
 
         // Disconnect from the reader to allow other Apps to use it
         // unless pausing when USB device attached or using the DeviceListActivity to select a Reader
         if(!ReaderManager.sharedInstance().didCauseOnPause() && mReader != null )
         {
             mReader.disconnect();
-            onDisconnect();
+            //onDisconnect();
         }
 
         ReaderManager.sharedInstance().onPause();
 
-        if (this.collector != null){
-            this.collector.onPause();
-        }
+//        if (this.collector != null){
+//            this.collector.onPause();
+//        }
 
     }
 
-    @Override
+    //@Override
     public void onDestroy()
     {
-        logMessage("onDestroy");
+        Log.d("","onDestroy");
         //super.onDestroy();
 
         // Remove observers for changes
@@ -290,14 +297,21 @@ public class TSLScannerDevice implements ScannerDevice {
         ReaderManager.sharedInstance().getReaderList().readerRemovedEvent().removeObserver(mRemovedObserver);
 
         if (this.collector != null){
-            this.collector.onDestroy();
+            //this.collector.onDestroy();
             this.collector = null;
         }
 
     }
 
+    private void onDisconnect(){
+        mConnectCallbackContext = null;
+        isInventoryRunning = false;
+        isTriggeredInventory = false;
+
+    }
+
     private Context getApplicationContext(){
-        return this.cordova.getActivity().getApplicationContext();
+        return this.rfidConnector.cordova.getActivity().getApplicationContext();
     }
 
     private void handleException(Exception ex, String caller, CallbackContext callbackContext) {
@@ -308,7 +322,7 @@ public class TSLScannerDevice implements ScannerDevice {
     //
     // Select the Reader to use and reconnect to it as needed
     //
-    private void AutoSelectReader(boolean attemptReconnect)
+    private void AutoSelectReaderOld(boolean attemptReconnect)
     {
         ObservableReaderList readerList = ReaderManager.sharedInstance().getReaderList();
         Reader usbReader = null;
@@ -386,6 +400,111 @@ public class TSLScannerDevice implements ScannerDevice {
         }
     }
 
+    //
+    // Select the Reader to use and reconnect to it as needed
+    //
+    private void AutoSelectReader(boolean attemptReconnect)
+    {
+        Log.d("CordovaLog", "autoSelectReader for "+attemptReconnect);
+        ObservableReaderList readerList = ReaderManager.sharedInstance().getReaderList();
+        Reader usbReader = null;
+        //logMessage("> "+readerList.list().size());
+        if( readerList.list().size() >= 1)
+        {
+            // Currently only support a single USB connected device so we can safely take the
+            // first CONNECTED reader if there is one
+            for (Reader reader : readerList.list())
+            {
+                //logMessage("Reader: " + reader.getDisplayName());
+                IAsciiTransport transport = reader.getActiveTransport();
+                if (reader.hasTransportOfType(TransportType.USB))
+                {
+                    Log.d("","set as usbReader");
+                    usbReader = reader;
+                    break;
+                }
+            }
+        }
+
+        if( mReader == null )
+        {
+            if( usbReader != null )
+            {
+                // Use the Reader found, if any
+                mReader = usbReader;
+                getCommander().setReader(mReader);
+            }
+        }
+        else
+        {
+            // If already connected to a Reader by anything other than USB then
+            // switch to the USB Reader
+            IAsciiTransport activeTransport = mReader.getActiveTransport();
+            if ( activeTransport != null && activeTransport.type() != TransportType.USB && usbReader != null)
+            {
+                Log.d("","Disconnecting from: " + mReader.getDisplayName());
+                mReader.disconnect();
+
+                mReader = usbReader;
+
+                // Use the Reader found, if any
+                getCommander().setReader(mReader);
+            }
+        }
+
+        if (mReader == null && readerList.list().size()==1){
+            mReader = readerList.list().get(0);
+            //logMessage("The Only ONE Reader: " + mReader.getDisplayName());
+            mReader.setAllowMultipleTransports(true);
+
+            getCommander().setReader(mReader);
+        }
+
+        Log.d("","AsciiCommander.isConnected() = "+getCommander().isConnected());
+        if (mReader != null){
+            Log.d("","mReader.getActiveTransport() = "+mReader.getActiveTransport());
+            Log.d("","mReader.hasTransportOfType(TransportType.USB) = "+mReader.hasTransportOfType(TransportType.USB));
+            Log.d("","mReader.hasTransportOfType(TransportType.BLUETOOTH) = "+mReader.hasTransportOfType(TransportType.BLUETOOTH));
+
+            if (mReader.getActiveTransport() != null){
+                Log.d(""," >> "+mReader.getActiveTransport().connectionStatus().value());
+            }
+        }
+
+        // Reconnect to the chosen Reader
+        if( mReader != null && (mReader.getActiveTransport()== null || mReader.getActiveTransport().connectionStatus().value() == ConnectionState.DISCONNECTED))
+        {
+            // Attempt to reconnect on the last used transport unless the ReaderManager is cause of OnPause (USB device connecting)
+            if( attemptReconnect )
+            {
+                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+                {
+                    Log.d("","Connecting to: " + mReader.getDisplayName());
+                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+                    try{
+                        boolean result = mReader.connect();
+                        Log.d("","result = "+result);
+                    } catch (Exception ex){
+                        Log.d("","FAILED");
+                        Log.e("CordovaLog", "Exception: ", ex);
+                    }
+                }
+                else
+                {
+                    Log.d("","Connecting (over last transport) to: " + mReader.getDisplayName());
+                    // Reader supports only a single active transport so connect to it over the transport that was last in use
+                    mReader.connect(mReader.getLastTransportType());
+                }
+            }
+        }
+
+
+        if (mReader != null){
+            //logMessage("Reader connect status = "+mReader.getActiveTransport().connectionStatus().value());
+
+        }
+    }
+
     // ReaderList Observers
     Observable.Observer<Reader> mAddedObserver = new Observable.Observer<Reader>()
     {
@@ -402,6 +521,7 @@ public class TSLScannerDevice implements ScannerDevice {
         @Override
         public void update(Observable<? extends Reader> observable, Reader reader)
         {
+            Log.d("","mUpdatedObserver update");
 //            // Is this a change to the last actively disconnected reader
 //            if( reader == mLastUserDisconnectedReader )
 //            {
@@ -411,20 +531,20 @@ public class TSLScannerDevice implements ScannerDevice {
 //            }
 
             // Was the current Reader disconnected i.e. the connected transport went away or disconnected
-            if( reader == mReader && !reader.isConnected() )
-            {
-                // No longer using this reader
-                mReader = null;
-
-                // Stop using the old Reader
-                getCommander().setReader(mReader);
-            }
-            else
-            {
-                // See if this updated Reader should be used
-                // e.g. the Reader's USB transport connected
-                AutoSelectReader(true);
-            }
+//            if( reader == mReader && !reader.isConnected() )
+//            {
+//                // No longer using this reader
+//                mReader = null;
+//
+//                // Stop using the old Reader
+//                getCommander().setReader(mReader);
+//            }
+//            else
+//            {
+//                // See if this updated Reader should be used
+//                // e.g. the Reader's USB transport connected
+//                AutoSelectReader(true);
+//            }
         }
     };
 
@@ -477,13 +597,13 @@ public class TSLScannerDevice implements ScannerDevice {
 //                mModel.updateConfiguration();
 //            }
 
-            switch (commander.getConnectionState()) {
+            switch (getCommander().getConnectionState()) {
                 case CONNECTED:
                     if (connectCallback != null) {
                         removeAsyncAndAddSyncResponder();
-                        if (commander.isConnected()) {
+                        if (getCommander().isConnected()) {
                             VersionInformationCommand versionInfoCommand = VersionInformationCommand.synchronousCommand();
-                            commander.executeCommand(versionInfoCommand);
+                            getCommander().executeCommand(versionInfoCommand);
                             if (versionInfoCommand.getManufacturer() == null || !(versionInfoCommand.getManufacturer()
                                     .toString()
                                     .contains("TSL")
@@ -493,14 +613,14 @@ public class TSLScannerDevice implements ScannerDevice {
                                 //commander.disconnect();
                                 //if( mReader != null ) {
                                 //    mReader.disconnect();
-                                    // Explicitly clear the Reader as we are finished with it
+                                // Explicitly clear the Reader as we are finished with it
                                 //    mReader = null;
-                               // }
+                                // }
                                 connectCallback.error("Not a recognised device!");
                             }else{
                                 InventoryCommand inventoryCommand = getInventoryInstance();
                                 inventoryCommand.setTakeNoAction(TriState.YES);
-                                commander.executeCommand(inventoryCommand);
+                                getCommander().executeCommand(inventoryCommand);
                                 removeSyncAndAddAsyncResponder();
                                 connectCallback.success("true");
                                 //connectCallback = null;
@@ -513,7 +633,7 @@ public class TSLScannerDevice implements ScannerDevice {
                     break;
                 case DISCONNECTED:
                     if (connectCallback != null) {
-                        connectCallback.error(commander.getConnectionState().name());
+                        connectCallback.error(getCommander().getConnectionState().name());
                         //connectCallback = null;
                     }
                     if (disconnectCallback != null) {
@@ -537,106 +657,122 @@ public class TSLScannerDevice implements ScannerDevice {
         handler.post(new Runnable() {
             @Override
             public void run() {
-                if (deviceID != null && deviceID.length() > 0) {
-                    Log.d("", "deviceID: " + deviceID + "\n");
-                    if (commander.isConnected()) {
-                        Log.d("", "DEVICE_IS_ALREADY_CONNECTED \n");
-                        callbackContext.error(DEVICE_IS_ALREADY_CONNECTED);
-                    } else {
-                        try {
-                            //ReaderManager.create(getApplicationContext());
-                            //ReaderManager.sharedInstance().getReaderList().list()
-                            ObservableReaderList mReadersCurrent = ReaderManager.sharedInstance().getReaderList();
-                            // ArrayList<Reader> mReadersCurrent = ReaderManager.sharedInstance().getReaderList().list();
-                            Log.d("", "ReaderManager \n");
-                            if(mReadersCurrent.list().size() >= 1){
-                                Log.d("", "mReaders \n");
-                                for (Reader listReader : mReadersCurrent.list()) {
-                                    if(!listReader.isConnected())
-                                    {
-                                        Log.d("", "Serial Number: " + listReader.getSerialNumber() + "\n");
-                                        Log.d("", "Display Name: " + listReader.getDisplayName() + "\n");
-                                        //if(listReader.getSerialNumber().equals(deviceID))
-                                        //{
-                                        mReader = listReader;
-                                        getCommander().setReader(mReader);
-                                        commander.setReader(mReader);
-                                        if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
-                                        {
-                                            // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
-                                            mReader.connect();
-                                            Log.d("", "Connected: " + mReader.getDisplayName() + "\n");
-                                        }
-                                        else
-                                        {
-                                            // Reader supports only a single active transport so connect to it over the transport that was last in use
-                                            mReader.connect(mReader.getLastTransportType());
-                                            Log.d("", "Connected: " + mReader.getDisplayName() + "\n");
-                                        }
-                                        callbackContext.success("true");
-                                        return;
-                                        //}
-                                    }
-
-                                }
-
-                            }
-                        } catch (Exception e) {
-                            Log.d("", "Error: " + e.getMessage() + "\n");
-                        }
-
-//                        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(context.BLUETOOTH_SERVICE);
-//                        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
-//
-//                        Boolean status = bluetoothAdapter.startDiscovery();
-//                        Set<BluetoothDevice> listOfBondedDevices = bluetoothAdapter.getBondedDevices();
-
-//                        for (BluetoothDevice device : listOfBondedDevices) {
-//                            if (deviceID.equals(device.getAddress()) || deviceID.equals(device.getName())) {
-//                                BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(device.getAddress());
-//                                //commander.connect(bluetoothDevice);
-//                                try {
-//                                    ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list();
-//                                    if(mReaders != null && !mReaders.isEmpty()){
-//                                        for (Reader listReader : mReaders) {
-//                                           if(listReader.getSerialNumber().equals(deviceID))
-//                                           {
-//                                                mReader = listReader;
-//                                                getCommander().setReader(mReader);
-//                                                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
-//                                                {
-//                                                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
-//                                                    mReader.connect();
-//                                                }
-//                                                else
-//                                                {
-//                                                    // Reader supports only a single active transport so connect to it over the transport that was last in use
-//                                                    mReader.connect(mReader.getLastTransportType());
-//                                                }
-//                                                break;
-//                                           }
-//                                        }
-//
-//                                    }
-//                                } catch (Exception e) {
-//                                    //TODO: handle exception
-//                                }
-//                                // printResponders(callbackContext, "After connect");
-//
-//                                // PluginResult pluginResult = new
-//                                // PluginResult(PluginResult.Status.OK,
-//                                // "Trying to connect " + deviceID + "(" + bluetoothDevice.getName()
-//                                // + ")");
-//                                // pluginResult.setKeepCallback(true);
-//                                // callbackContext.sendPluginResult(pluginResult);
-//                                return;
-//                            }
-//                        }
-                        callbackContext.error("Device not found " + deviceID);
+                try{
+                    AsciiCommander c = getCommander();
+                    if (c!=null && c.isConnected()){
+                        Log.i("CordovaLog", "connect() A");
+                        callbackContext.success("true");
+                        //callbackContext = null;
+                    }else{
+                        onResumeTask();
                     }
-                } else {
-                    callbackContext.error("Expected one non-empty string argument for device ID.");
+                }catch(Exception ex) {
+                    handleException(ex, "connect", mConnectCallbackContext);
                 }
+//                if (deviceID != null && deviceID.length() > 0) {
+//                    Log.d("", "deviceID: " + deviceID + "\n");
+//                    if(commander == null)
+//                    {
+//                        commander = getCommander();
+//                    }
+//                    if (commander.isConnected()) {
+//                        Log.d("", "DEVICE_IS_ALREADY_CONNECTED \n");
+//                        callbackContext.error(DEVICE_IS_ALREADY_CONNECTED);
+//                    } else {
+//                        try {
+//                            //ReaderManager.create(getApplicationContext());
+//                            //ReaderManager.sharedInstance().getReaderList().list()
+//                            ObservableReaderList mReadersCurrent = ReaderManager.sharedInstance().getReaderList();
+//                            // ArrayList<Reader> mReadersCurrent = ReaderManager.sharedInstance().getReaderList().list();
+//                            Log.d("", "ReaderManager \n");
+//                            if(mReadersCurrent.list().size() >= 1){
+//                                Log.d("", "mReaders \n");
+//                                for (Reader listReader : mReadersCurrent.list()) {
+//                                    if(!listReader.isConnected())
+//                                    {
+//                                        Log.d("", "Serial Number: " + listReader.getSerialNumber() + "\n");
+//                                        Log.d("", "Display Name: " + listReader.getDisplayName() + "\n");
+//                                        //if(listReader.getSerialNumber().equals(deviceID))
+//                                        //{
+//                                        mReader = listReader;
+//                                        getCommander().setReader(mReader);
+//                                        commander.setReader(mReader);
+//                                        if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+//                                        {
+//                                            // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+//                                            mReader.connect();
+//                                            Log.d("", "Connected: " + mReader.getDisplayName() + "\n");
+//                                        }
+//                                        else
+//                                        {
+//                                            // Reader supports only a single active transport so connect to it over the transport that was last in use
+//                                            mReader.connect(mReader.getLastTransportType());
+//                                            Log.d("", "Connected: " + mReader.getDisplayName() + "\n");
+//                                        }
+//                                        callbackContext.success("true");
+//                                        return;
+//                                        //}
+//                                    }
+//
+//                                }
+//
+//                            }
+//                        } catch (Exception e) {
+//                            Log.d("", "Error: " + e.getMessage() + "\n");
+//                        }
+//
+////                        BluetoothManager bluetoothManager = (BluetoothManager) context.getSystemService(context.BLUETOOTH_SERVICE);
+////                        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+////
+////                        Boolean status = bluetoothAdapter.startDiscovery();
+////                        Set<BluetoothDevice> listOfBondedDevices = bluetoothAdapter.getBondedDevices();
+//
+////                        for (BluetoothDevice device : listOfBondedDevices) {
+////                            if (deviceID.equals(device.getAddress()) || deviceID.equals(device.getName())) {
+////                                BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(device.getAddress());
+////                                //commander.connect(bluetoothDevice);
+////                                try {
+////                                    ArrayList<Reader> mReaders = ReaderManager.sharedInstance().getReaderList().list();
+////                                    if(mReaders != null && !mReaders.isEmpty()){
+////                                        for (Reader listReader : mReaders) {
+////                                           if(listReader.getSerialNumber().equals(deviceID))
+////                                           {
+////                                                mReader = listReader;
+////                                                getCommander().setReader(mReader);
+////                                                if( mReader.allowMultipleTransports() || mReader.getLastTransportType() == null )
+////                                                {
+////                                                    // Reader allows multiple transports or has not yet been connected so connect to it over any available transport
+////                                                    mReader.connect();
+////                                                }
+////                                                else
+////                                                {
+////                                                    // Reader supports only a single active transport so connect to it over the transport that was last in use
+////                                                    mReader.connect(mReader.getLastTransportType());
+////                                                }
+////                                                break;
+////                                           }
+////                                        }
+////
+////                                    }
+////                                } catch (Exception e) {
+////                                    //TODO: handle exception
+////                                }
+////                                // printResponders(callbackContext, "After connect");
+////
+////                                // PluginResult pluginResult = new
+////                                // PluginResult(PluginResult.Status.OK,
+////                                // "Trying to connect " + deviceID + "(" + bluetoothDevice.getName()
+////                                // + ")");
+////                                // pluginResult.setKeepCallback(true);
+////                                // callbackContext.sendPluginResult(pluginResult);
+////                                return;
+////                            }
+////                        }
+//                        callbackContext.error("Device not found " + deviceID);
+//                    }
+//                } else {
+//                    callbackContext.error("Expected one non-empty string argument for device ID.");
+//                }
             }
         });
     }
@@ -645,9 +781,9 @@ public class TSLScannerDevice implements ScannerDevice {
     public void isConnected(final CallbackContext callbackContext) {
 
         removeAsyncAndAddSyncResponder();
-        if (commander.isConnected()) {
+        if (getCommander().isConnected()) {
             VersionInformationCommand versionInfoCommand = VersionInformationCommand.synchronousCommand();
-            commander.executeCommand(versionInfoCommand);
+            getCommander().executeCommand(versionInfoCommand);
             if(versionInfoCommand.getManufacturer() == null || !versionInfoCommand.getManufacturer().toString().contains("TSL")){
                 callbackContext.error("This not a recognised device!");
             }else{
@@ -663,7 +799,7 @@ public class TSLScannerDevice implements ScannerDevice {
     @Override
     public void disconnect(final CallbackContext callbackContext) {
         disconnectCallback = callbackContext;
-        if (commander.isConnected()) {
+        if (getCommander().isConnected()) {
             removeAsyncResponders();
 
             inventorySearchResponder = null;
@@ -672,7 +808,7 @@ public class TSLScannerDevice implements ScannerDevice {
             inventoryResponder = null;
             barcodeResponder = null;
             dataAvailableCallback = null;
-            // commander.disconnect();
+            // getCommander().disconnect();
             if( mReader != null ) {
                 mReader.disconnect();
                 // Explicitly clear the Reader as we are finished with it
@@ -693,29 +829,29 @@ public class TSLScannerDevice implements ScannerDevice {
         // printResponders(callbackContext, "Before getDeviceInfo");
         try {
             removeAsyncAndAddSyncResponder();
-            if (commander.isConnected()) {
+            if (getCommander().isConnected()) {
                 JSONObject deviceInfo = new JSONObject();
                 BatteryStatusCommand status = BatteryStatusCommand.synchronousCommand();
-                commander.executeCommand(status);
+                getCommander().executeCommand(status);
 
-                deviceInfo.put(DEVICE_NAME, commander.getConnectedDeviceName());
+                deviceInfo.put(DEVICE_NAME, getCommander().getConnectedDeviceName());
                 deviceInfo.put(BATTERY_LEVEL, status.getBatteryLevel());
                 deviceInfo.put(BATTERY_STATUS, status.getChargeStatus() == null ? " " : status.getChargeStatus().getDescription());
 
                 VersionInformationCommand versionInfoCommand = VersionInformationCommand.synchronousCommand();
-                commander.executeCommand(versionInfoCommand);
+                getCommander().executeCommand(versionInfoCommand);
 
                 deviceInfo.put(HARDWARE_VERSION, "N.A.");
                 deviceInfo.put(FIRMWARE_VERSION, versionInfoCommand.getFirmwareVersion() == null ? " " : versionInfoCommand.getFirmwareVersion());
                 deviceInfo.put(MANUFACTURER, versionInfoCommand.getManufacturer() == null ? " " : versionInfoCommand.getManufacturer());
                 deviceInfo.put(SERIAL_NUMBER, versionInfoCommand.getSerialNumber() == null ? " " : versionInfoCommand.getSerialNumber());
-                deviceInfo.put(ANTENNA_MIN, commander.getDeviceProperties().getMinimumCarrierPower());
-                deviceInfo.put(ANTENNA_MAX, commander.getDeviceProperties().getMaximumCarrierPower());
+                deviceInfo.put(ANTENNA_MIN, getCommander().getDeviceProperties().getMinimumCarrierPower());
+                deviceInfo.put(ANTENNA_MAX, getCommander().getDeviceProperties().getMaximumCarrierPower());
                 deviceInfo.put(SCAN_POWER, getInventoryInstance().getOutputPower());
 
-                callbackContext.success(JSONUtil.createJSONObjectSuccessResponse(deviceInfo));
+                callbackContext.success(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectSuccessResponse(deviceInfo));
             } else {
-                callbackContext.error(JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
+                callbackContext.error(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
             }
 
         } catch (JSONException ex) {
@@ -737,17 +873,14 @@ public class TSLScannerDevice implements ScannerDevice {
                 ReaderManager.sharedInstance().updateList();
                 if(mReader != null && !mReader.isConnected())
                 {
-                    mReader.connect();
-                    commander.setReader(mReader);
+                    AutoSelectReader(true);
                 }
                 if(mReader == null && ReaderManager.sharedInstance().getReaderList().list().size() >= 1){
-                    mReader = ReaderManager.sharedInstance().getReaderList().list().get(0);
-                    mReader.connect();
-                    commander.setReader(mReader);
+                    AutoSelectReader(true);
                 }
 
             }
-            if (commander.isConnected()) {
+            if (getCommander().isConnected()) {
                 final JSONArray data = new JSONArray();
 
                 InventoryCommand inventoryCommand = getInventoryInstance();
@@ -768,19 +901,19 @@ public class TSLScannerDevice implements ScannerDevice {
 //                                epc = ConversionUtil.hexToAscii(epc);
 //                            }
 
-                            data.put(JSONUtil.createRFIDJSONObject(epc, transponder.getRssi()));
+                            data.put(cordova.plugin.rfidconnector.JSONUtil.createRFIDJSONObject(epc, transponder.getRssi()));
                         } catch (JSONException ex) {
                             // Handle tag failure response
                         }
                     }
                 });
 
-                commander.executeCommand(inventoryCommand);
+                getCommander().executeCommand(inventoryCommand);
 
-                callbackContext.success(JSONUtil.createJSONObjectSuccessResponse(data));
+                callbackContext.success(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectSuccessResponse(data));
 
             } else {
-                callbackContext.error(JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
+                callbackContext.error(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
             }
         } catch (JSONException ex) {
             callbackContext.error(ERROR_LABEL + ex.getMessage());
@@ -795,7 +928,7 @@ public class TSLScannerDevice implements ScannerDevice {
         // printResponders(callbackContext, "Before search");
         try {
             removeAsyncAndAddSyncResponder();
-            if (commander.isConnected() && tagID != null) {
+            if (getCommander().isConnected() && tagID != null) {
                 final JSONArray data = new JSONArray();
 
                 InventoryCommand inventoryCommand = getInventoryInstance();
@@ -847,7 +980,7 @@ public class TSLScannerDevice implements ScannerDevice {
                     }
                 });
 
-                commander.executeCommand(inventoryCommand);
+                getCommander().executeCommand(inventoryCommand);
                 callbackContext.success(JSONUtil.createJSONObjectSuccessResponse(data));
 
             } else {
@@ -865,7 +998,7 @@ public class TSLScannerDevice implements ScannerDevice {
     public void startSearch(final String tagID, final boolean useAscii, final CallbackContext callbackContext) {
         // printResponders(callbackContext, "Before startSearch");
         try {
-            if (commander.isConnected() && searchCallback == null) {
+            if (getCommander().isConnected() && searchCallback == null) {
                 searchCallback = callbackContext;
                 removeAsyncResponders();
                 // Inventory responder
@@ -925,17 +1058,17 @@ public class TSLScannerDevice implements ScannerDevice {
                         }
                     });
 
-                    commander.addResponder(inventorySearchResponder);
-                    // commander.executeCommand(inventorySearchResponder);
+                    getCommander().addResponder(inventorySearchResponder);
+                    // getCommander().executeCommand(inventorySearchResponder);
                 }
 
                 PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, "SEARCH ACTIVATED");
                 pluginResult.setKeepCallback(true);
                 callbackContext.sendPluginResult(pluginResult);
-            } else if (commander.isConnected()) {
-                callbackContext.error(JSONUtil.createJSONObjectErrorResponse("SEARCH IS ALREADY ACTIVATED"));
+            } else if (getCommander().isConnected()) {
+                callbackContext.error(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectErrorResponse("SEARCH IS ALREADY ACTIVATED"));
             } else {
-                callbackContext.error(JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
+                callbackContext.error(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
             }
         } catch (JSONException ex) {
             callbackContext.error(ERROR_LABEL + ex.getMessage());
@@ -947,9 +1080,9 @@ public class TSLScannerDevice implements ScannerDevice {
     public void stopSearch(final CallbackContext callbackContext) {
         // printResponders(callbackContext, "Before stopSearch");
         try {
-            if (commander.isConnected()) {
+            if (getCommander().isConnected()) {
                 if (inventorySearchResponder != null) {
-                    commander.removeResponder(inventorySearchResponder);
+                    getCommander().removeResponder(inventorySearchResponder);
                     PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, "REMOVING SEARCH RESPONDER");
                     pluginResult.setKeepCallback(true);
                     callbackContext.sendPluginResult(pluginResult);
@@ -971,12 +1104,39 @@ public class TSLScannerDevice implements ScannerDevice {
     }
 
     @Override
+    public void onPause() {
+        Log.d("","Pausing...");
+        // Register to receive notifications from the AsciiCommander
+        LocalBroadcastManager.getInstance(this.rfidConnector.cordova.getActivity()).unregisterReceiver(mCommanderMessageReceiver);
+
+        // Disconnect from the reader to allow other Apps to use it
+        // unless pausing when USB device attached or using the DeviceListActivity to select a Reader
+        if(!ReaderManager.sharedInstance().didCauseOnPause() && mReader != null )
+        {
+            mReader.disconnect();
+            onDisconnect();
+        }
+
+        ReaderManager.sharedInstance().onPause();
+
+//        if (this.collector != null){
+//            this.collector.onPause();
+//        }
+    }
+
+    @Override
+    public void onResume() {
+        Log.d("","Resuming...");
+        onResumeTask();
+    }
+
+    @Override
     public void setOutputPower(final int powerValue, final CallbackContext callbackContext) {
         try {
             removeAsyncAndAddSyncResponder();
-            if (commander.isConnected()) {
-                int minPower = commander.getDeviceProperties().getMinimumCarrierPower();
-                int maxPower = commander.getDeviceProperties().getMaximumCarrierPower();
+            if (getCommander().isConnected()) {
+                int minPower = getCommander().getDeviceProperties().getMinimumCarrierPower();
+                int maxPower = getCommander().getDeviceProperties().getMaximumCarrierPower();
 
                 if (powerValue >= minPower && powerValue <= maxPower) {
                     InventoryCommand mInventoryCommand = getInventoryInstance();
@@ -991,7 +1151,7 @@ public class TSLScannerDevice implements ScannerDevice {
                     mInventoryCommand.setTakeNoAction(TriState.YES);
                     mInventoryCommand.setOutputPower(powerValue);
 
-                    commander.executeCommand(mInventoryCommand);
+                    getCommander().executeCommand(mInventoryCommand);
 
                     callbackContext.success("Scan power set from " + oldPower + " to " + powerValue);
                 } else {
@@ -1011,7 +1171,7 @@ public class TSLScannerDevice implements ScannerDevice {
     public void subscribeScanner(final boolean useASCII, final CallbackContext callbackContext) {
         // printResponders(callbackContext, "Before subscribeScanner");
         try {
-            if (commander.isConnected() && dataAvailableCallback == null) {
+            if (getCommander().isConnected() && dataAvailableCallback == null) {
                 dataAvailableCallback = callbackContext;
 
                 // Inventory responder
@@ -1047,7 +1207,7 @@ public class TSLScannerDevice implements ScannerDevice {
                         }
                     });
 
-                    commander.addResponder(inventoryResponder);
+                    getCommander().addResponder(inventoryResponder);
                 }
 
                 if (barcodeResponder == null) {
@@ -1069,15 +1229,15 @@ public class TSLScannerDevice implements ScannerDevice {
                             }
                         };
                     });
-                    commander.addResponder(barcodeResponder);
+                    getCommander().addResponder(barcodeResponder);
                 }
                 PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, "SUBSCRIBED TO SCANNER.");
                 pluginResult.setKeepCallback(true);
                 callbackContext.sendPluginResult(pluginResult);
-            } else if (commander.isConnected()) {
-                callbackContext.error(JSONUtil.createJSONObjectErrorResponse("DEVICE IS ALREADY SUBSCRIBED."));
+            } else if (getCommander().isConnected()) {
+                callbackContext.error(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectErrorResponse("DEVICE IS ALREADY SUBSCRIBED."));
             } else {
-                callbackContext.error(JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
+                callbackContext.error(cordova.plugin.rfidconnector.JSONUtil.createJSONObjectErrorResponse(DEVICE_IS_NOT_CONNECTED));
             }
         } catch (JSONException ex) {
             callbackContext.error(ERROR_LABEL + ex.getMessage());
@@ -1089,7 +1249,7 @@ public class TSLScannerDevice implements ScannerDevice {
     public void unsubscribeScanner(final CallbackContext callbackContext) {
         // printResponders(callbackContext, "Before unsubscribeScanner");
         try {
-            if (commander.isConnected()) {
+            if (getCommander().isConnected()) {
                 removeAsyncResponders();
                 inventoryResponder = null;
                 barcodeResponder = null;
@@ -1122,21 +1282,21 @@ public class TSLScannerDevice implements ScannerDevice {
 
     private void removeAsyncAndAddSyncResponder() {
         removeAsyncResponders();
-        commander.addSynchronousResponder();
+        getCommander().addSynchronousResponder();
     }
 
     private void removeSyncAndAddAsyncResponder() {
-        commander.removeSynchronousResponder();
+        getCommander().removeSynchronousResponder();
         addAsyncResponders();
     }
 
     private void removeAsyncResponders() {
         if (dataAvailableCallback != null) {
             if (inventoryResponder != null) {
-                commander.removeResponder(inventoryResponder);
+                getCommander().removeResponder(inventoryResponder);
             }
             if (barcodeResponder != null) {
-                commander.removeResponder(barcodeResponder);
+                getCommander().removeResponder(barcodeResponder);
             }
         }
     }
@@ -1144,16 +1304,16 @@ public class TSLScannerDevice implements ScannerDevice {
     private void addAsyncResponders() {
         if (dataAvailableCallback != null) {
             if (inventoryResponder != null) {
-                commander.addResponder(inventoryResponder);
+                getCommander().addResponder(inventoryResponder);
             }
             if (barcodeResponder != null) {
-                commander.addResponder(barcodeResponder);
+                getCommander().addResponder(barcodeResponder);
             }
         }
     }
 
     private void printResponders(final CallbackContext callbackContext, final String message) {
-        for (IAsciiCommandResponder responder : commander.getResponderChain()) {
+        for (IAsciiCommandResponder responder : getCommander().getResponderChain()) {
             PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, message + " ***RRRR*** " + responder.toString());
             pluginResult.setKeepCallback(true);
             callbackContext.sendPluginResult(pluginResult);
@@ -1164,7 +1324,7 @@ public class TSLScannerDevice implements ScannerDevice {
     // Model notifications
     //----------------------------------------------------------------------------------------------
 
-    private class GenericHandler extends WeakHandler<Activity>
+    private class GenericHandler extends cordova.plugin.rfidconnector.WeakHandler<Activity>
     {
         public GenericHandler(Activity t)
         {
@@ -1176,47 +1336,47 @@ public class TSLScannerDevice implements ScannerDevice {
         {
             Log.d("CordovaLog", "handling message @GenericHandler");
             try {
-                switch (msg.what) {
-                    case ModelBase.BUSY_STATE_CHANGED_NOTIFICATION:
-                        //TODO: process change in model busy state
-                        break;
-
-                    case ModelBase.MESSAGE_NOTIFICATION:
-                        // Examine the message for prefix
-                        String message = (String)msg.obj;
-
-                        if( message.startsWith("ER:")) {
-                            Log.d("CordovaLog","message.obj.substring(3) : "+message.substring(3));
-                        }
-                        else if( message.startsWith("BC:")) {
-                            Log.d("CordovaLog","message.obj: "+message);
-
-                        } else {
-                            Log.d("CordovaLog","message.obj: "+message);
-                            if (isInventoryRunning){
-                                //notify cordova after first scan
-                                if (isTriggeredInventory && message.indexOf("TagCount")>=0){
-                                    sendOkToCallbackAndKeep(dataAvailableCallback);
-                                }else{
-                                    processReadRFID(message);
-                                }
-                            }else if (mWriteCallbackContext != null){
-                                if (message.contains("WriteTransponderCommand failed")){ //TODO replace it and use a Error code (see API)
-                                    mWriteCallbackContext.error(message);
-                                }
-                                if (message.contains("Words Written: 6 of 6")){ //TODO replace it and use a OK code (see API)
-                                    logMessage("writeTag without Exception :-)");
-                                    mWriteCallbackContext.success("Ok");
-                                }
-                            }
-                        }
-
-                        break;
-
-                    default:
-                        Log.d("CordovaLog", "message: "+msg);
-                        break;
-                }
+//                switch (msg.what) {
+//                    case ModelBase.BUSY_STATE_CHANGED_NOTIFICATION:
+//                        //TODO: process change in model busy state
+//                        break;
+//
+//                    case ModelBase.MESSAGE_NOTIFICATION:
+//                        // Examine the message for prefix
+//                        String message = (String)msg.obj;
+//
+//                        if( message.startsWith("ER:")) {
+//                            Log.d("CordovaLog","message.obj.substring(3) : "+message.substring(3));
+//                        }
+//                        else if( message.startsWith("BC:")) {
+//                            Log.d("CordovaLog","message.obj: "+message);
+//
+//                        } else {
+//                            Log.d("CordovaLog","message.obj: "+message);
+//                            if (isInventoryRunning){
+//                                //notify cordova after first scan
+//                                if (isTriggeredInventory && message.indexOf("TagCount")>=0){
+//                                    sendOkToCallbackAndKeep(dataAvailableCallback);
+//                                }else{
+//                                    processReadRFID(message);
+//                                }
+//                            }else if (mWriteCallbackContext != null){
+//                                if (message.contains("WriteTransponderCommand failed")){ //TODO replace it and use a Error code (see API)
+//                                    mWriteCallbackContext.error(message);
+//                                }
+//                                if (message.contains("Words Written: 6 of 6")){ //TODO replace it and use a OK code (see API)
+//                                    logMessage("writeTag without Exception :-)");
+//                                    mWriteCallbackContext.success("Ok");
+//                                }
+//                            }
+//                        }
+//
+//                        break;
+//
+//                    default:
+//                        Log.d("CordovaLog", "message: "+msg);
+//                        break;
+//                }
             } catch (Exception e) {
             }
 
@@ -1239,7 +1399,7 @@ public class TSLScannerDevice implements ScannerDevice {
     }
 
     private void onCreateForEDA51(){
-        this.collector = new Collector(this.cordova.getActivity());
-        this.collector.onCreate();
+        //this.collector = new Collector(this.rfidConnector.cordova.getActivity());
+        //this.collector.onCreate();
     }
 }

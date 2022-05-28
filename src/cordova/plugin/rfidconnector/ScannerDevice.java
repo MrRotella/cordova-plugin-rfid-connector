@@ -80,4 +80,10 @@ public interface ScannerDevice {
      * @param callbackContext
      */
     void stopSearch(CallbackContext callbackContext);
+
+    void onPause();
+
+    void onResume();
+
+    void onDestroy();
 }

@@ -19,6 +19,7 @@ import android.os.Looper;
 public class RFIDConnector extends CordovaPlugin {
     static String details = "EMPTY";
     static String deviceType = "Zebra";
+    cordova.plugin.rfidconnector.ScannerDevice scannerDevice = null;
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
@@ -31,7 +32,7 @@ public class RFIDConnector extends CordovaPlugin {
             deviceType = args.getString(0);
         }
 
-        ScannerDevice scannerDevice = ScannerDeviceFactory.getInstance(this, deviceType);
+        scannerDevice = ScannerDeviceFactory.getInstance(this, deviceType);
 
         if ("connect".equals(action)) {
             scannerDevice.connect(args.getString(1), callbackContext);
@@ -62,6 +63,29 @@ public class RFIDConnector extends CordovaPlugin {
         return true;
     }
 
+    @Override
+    public void onPause(boolean multitasking) {
+        if(scannerDevice  != null)
+        {
+            scannerDevice.onPause();
+        }
+    }
+
+    @Override
+    public void onResume(boolean multitasking) {
+        if(scannerDevice  != null)
+        {
+            scannerDevice.onResume();
+        }
+    }
+    @Override
+    public void onDestroy()
+    {
+        if(scannerDevice  != null)
+        {
+            scannerDevice.onDestroy();
+        }
+    }
     public void getDeviceList(final CallbackContext callbackContext) {
         final CordovaPlugin that = this;
         final Context context = that.cordova.getActivity().getBaseContext();
