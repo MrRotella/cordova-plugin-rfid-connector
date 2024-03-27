@@ -9,7 +9,7 @@ dependencies {
   implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
   implementation(name : 'Rfid.AsciiProtocol-2.5.0-release',ext:'aar')
   implementation(name : 'barcode_scanner_library_v2.3.1.0',ext:'aar'){
-    configurations:{
+    configurations {
       compile.exclude module: 'gson'
     }
   }
