@@ -11,12 +11,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/suporterfid/cordova-plugin-rfid-connector.git"
+    "url": "https://github.com/MrRotella/cordova-plugin-rfid-connector.git"
   },
   "keywords": [
     "ecosystem:cordova",
-    "cordova-android",
-    "cordova-ios"
+    "cordova-android"
   ],
   "author": "",
   "license": "ISC",
