@@ -63,22 +63,22 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
 
      // Permissions found in example Scanner Control app (version 2.6.16.0)
      private static final String[] ANDROID_13_PERMISSIONS = new String[]{
-        Manifest.permission.BLUETOOTH_SCAN?Manifest.permission.BLUETOOTH_SCAN:"BLUETOOTH_SCAN",
-        Manifest.permission.BLUETOOTH_CONNECT?Manifest.permission.BLUETOOTH_CONNECT:"BLUETOOTH_CONNECT",
-        Manifest.permission.BLUETOOTH_ADVERTISE?Manifest.permission.BLUETOOTH_ADVERTISE:"BLUETOOTH_ADVERTISE",
-        Manifest.permission.ACCESS_FINE_LOCATION?Manifest.permission.ACCESS_FINE_LOCATION:"ACCESS_FINE_LOCATION",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_ADVERTISE",
+        "ACCESS_FINE_LOCATION"
     };
 
     private static final String[] ANDROID_12_PERMISSIONS = new String[]{
-        Manifest.permission.BLUETOOTH_SCAN?Manifest.permission.BLUETOOTH_SCAN:"BLUETOOTH_SCAN",
-        Manifest.permission.BLUETOOTH_CONNECT?Manifest.permission.BLUETOOTH_CONNECT:"BLUETOOTH_CONNECT",
-        Manifest.permission.BLUETOOTH_ADVERTISE?Manifest.permission.BLUETOOTH_ADVERTISE:"BLUETOOTH_ADVERTISE",
-        Manifest.permission.ACCESS_FINE_LOCATION?Manifest.permission.ACCESS_FINE_LOCATION:"ACCESS_FINE_LOCATION",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_ADVERTISE",
+        "ACCESS_FINE_LOCATION"
     };
 
     private static final String[] ANDROID_PERMISSIONS = new String[]{
         Manifest.permission.BLUETOOTH,
-        Manifest.permission.BLUETOOTH_ADMIN,
+        Manifest.permission.BLUETOOTH_ADMIN
     };
 
     public boolean hasPermission(String[] permissions) {
@@ -96,9 +96,9 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     public void checkPermissions(final CallbackContext callbackContext) {
          // Set permissions based on Android version
          String[] permissions = {};
-         if (Build.VERSION.SDK_INT >= (Build.VERSION_CODES.TIRAMISU?Build.VERSION_CODES.TIRAMISU:33) ) {
+         if (Build.VERSION.SDK_INT >= :33 ) {
              permissions = ANDROID_13_PERMISSIONS;
-         } else if (Build.VERSION.SDK_INT >= (Build.VERSION_CODES.S?Build.VERSION_CODES.S:31)) {
+         } else if (Build.VERSION.SDK_INT >= 31) {
              permissions = ANDROID_12_PERMISSIONS;
          } else {
              permissions = ANDROID_PERMISSIONS;
