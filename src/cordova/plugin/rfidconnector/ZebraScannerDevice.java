@@ -6,6 +6,7 @@ import java.util.Set;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
+import org.apache.cordova.PermissionHelper;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -28,6 +29,8 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
+import android.Manifest;
+import android.os.Build;
 
 
 public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerDevice {
@@ -44,6 +47,7 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     private static final String FIRMWARE_VERSION = "firmwareVersion";
     private static final String HARDWARE_VERSION = "hardwareVersion";
     private static final String DEVICE_IS_ALREADY_CONNECTED = "Device is already connected";
+    private static final String MISSING_PERMISSIONS = "Missingrequired android permissions";
     private CordovaPlugin rfidConnector;
     private static ReaderDevice readerDevice;
     private static RFIDReader rfidReader;
@@ -56,6 +60,55 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     private static SDKHandler sdkHandler;
     private static ArrayList<DCSScannerInfo> mScannerInfoList = new ArrayList<DCSScannerInfo>();
     public static CallbackContext asyncCallbackContext = null;
+
+     // Permissions found in example Scanner Control app (version 2.6.16.0)
+     private static final String[] ANDROID_13_PERMISSIONS = new String[]{
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT,
+        Manifest.permission.BLUETOOTH_ADVERTISE,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+    };
+
+    private static final String[] ANDROID_12_PERMISSIONS = new String[]{
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT,
+        Manifest.permission.BLUETOOTH_ADVERTISE,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+    };
+
+    private static final String[] ANDROID_PERMISSIONS = new String[]{
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.BLUETOOTH_ADMIN,
+    };
+
+    public boolean hasPermission(String[] permissions) {
+        for(String p : permissions)
+        {
+            if(!PermissionHelper.hasPermission(this, p))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void checkPermissions(final CallbackContext callbackContext) {
+         // Set permissions based on Android version
+         String[] permissions = {};
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+             permissions = ANDROID_13_PERMISSIONS;
+         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+             permissions = ANDROID_12_PERMISSIONS;
+         } else {
+             permissions = ANDROID_PERMISSIONS;
+         }
+         if (hasPermission(permissions)) {
+            callbackContext.success("true");
+         } else {
+            callbackContext.error(MISSING_PERMISSIONS);
+         }
+    }
 
     public ZebraScannerDevice(final CordovaPlugin rfidConnector) {
         this.rfidConnector = rfidConnector;

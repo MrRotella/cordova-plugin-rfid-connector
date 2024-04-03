@@ -81,6 +81,11 @@ public interface ScannerDevice {
      */
     void stopSearch(CallbackContext callbackContext);
 
+    /**
+     * @param callbackContext
+     */
+    void checkPermissions(CallbackContext callbackContext);
+
     void onPause();
 
     void onResume();

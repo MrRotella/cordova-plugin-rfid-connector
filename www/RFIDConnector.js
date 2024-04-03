@@ -95,6 +95,12 @@ cordova.define("cordova/plugin/RFIDConnector", function(require, exports,
 				[]);
 	}
 
+	RFIDConnector.prototype.checkPermissions = function(successCallback,
+			failureCallback) {
+		exec(successCallback, failureCallback, 'RFIDConnector', 'checkPermissions',
+				[]);
+	}
+
 	var rfidConnectorplugin = new RFIDConnector();
 	module.exports = rfidConnectorplugin;
 });

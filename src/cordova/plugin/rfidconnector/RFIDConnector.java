@@ -56,6 +56,8 @@ public class RFIDConnector extends CordovaPlugin {
             scannerDevice.startSearch(args.getString(0), args.getBoolean(1), callbackContext);
         } else if ("stopSearch".equals(action)) {
             scannerDevice.stopSearch(callbackContext);
+        } else if ("checkPermissions".equals(action)) {
+            scannerDevice.checkPermissions(callbackContext);
         } else {
             callbackContext.error("RFID Connector error: UNSUPPORTED_COMMAND");
             return false;
