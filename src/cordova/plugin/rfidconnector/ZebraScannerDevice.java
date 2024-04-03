@@ -96,7 +96,7 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     public void checkPermissions(final CallbackContext callbackContext) {
          // Set permissions based on Android version
          String[] permissions = {};
-         if (Build.VERSION.SDK_INT >= :33 ) {
+         if (Build.VERSION.SDK_INT >= 33 ) {
              permissions = ANDROID_13_PERMISSIONS;
          } else if (Build.VERSION.SDK_INT >= 31) {
              permissions = ANDROID_12_PERMISSIONS;
