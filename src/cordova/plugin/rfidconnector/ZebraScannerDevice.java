@@ -47,7 +47,7 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     private static final String FIRMWARE_VERSION = "firmwareVersion";
     private static final String HARDWARE_VERSION = "hardwareVersion";
     private static final String DEVICE_IS_ALREADY_CONNECTED = "Device is already connected";
-    private static final String MISSING_PERMISSIONS = "Missingrequired android permissions";
+    private static final String MISSING_PERMISSIONS = "Missing required android permissions";
     private CordovaPlugin rfidConnector;
     private static ReaderDevice readerDevice;
     private static RFIDReader rfidReader;
@@ -84,7 +84,7 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     public boolean hasPermission(String[] permissions) {
         for(String p : permissions)
         {
-            if(!PermissionHelper.hasPermission(this, p))
+            if(!PermissionHelper.hasPermission(this.rfidConnector, p))
             {
                 return false;
             }
@@ -106,9 +106,11 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
          if (hasPermission(permissions)) {
             callbackContext.success("true");
          } else {
-            callbackContext.error(MISSING_PERMISSIONS);
+            // callbackContext.error(MISSING_PERMISSIONS);
+            PermissionHelper.requestPermissions(this.rfidConnector, 0, permissions);
          }
     }
+
 
     public ZebraScannerDevice(final CordovaPlugin rfidConnector) {
         this.rfidConnector = rfidConnector;
