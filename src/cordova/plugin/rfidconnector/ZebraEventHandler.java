@@ -310,4 +310,9 @@ class ZebraEventHandler implements IDcsSdkApiDelegate, RfidEventsListener {
     public void dcssdkEventConfigurationUpdate(ConfigurationUpdateEvent configEvent) {
         // Log.d(TAG, "dcssdkEventConfigurationUpdate appeared");
     }
+
+    @Override
+    public void dcssdkEventBinaryData(byte[] var1, int var2) {
+        Log.d(TAG, "Got dcssdkEventBinaryData");
+    }
 }
