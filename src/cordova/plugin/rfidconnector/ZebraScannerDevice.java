@@ -3,6 +3,7 @@ package cordova.plugin.rfidconnector;
 import java.util.ArrayList;
 import java.util.Set;
 
+
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.PluginResult;
@@ -32,6 +33,8 @@ import android.widget.Toast;
 import android.Manifest;
 import android.os.Build;
 
+import android.util.Log;
+
 
 public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerDevice {
     private static final String BARCODE_SCANNER_CONNECTION_ERROR = "Barcode Scanner Connection Failed!";
@@ -60,6 +63,7 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     private static SDKHandler sdkHandler;
     private static ArrayList<DCSScannerInfo> mScannerInfoList = new ArrayList<DCSScannerInfo>();
     public static CallbackContext asyncCallbackContext = null;
+    private static final String TAG = "ZebraScannerDevice";
 
      // Permissions found in example Scanner Control app (version 2.6.16.0)
      private static final String[] ANDROID_13_PERMISSIONS = new String[]{
@@ -103,9 +107,12 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
          } else {
              permissions = ANDROID_PERMISSIONS;
          }
+         Log.d(TAG, "permissions:" + permissions.toString());
          if (hasPermission(permissions)) {
+            Log.d(TAG, "permissions OK");
             callbackContext.success("true");
          } else {
+            Log.d(TAG, "permissions KO");
             // callbackContext.error(MISSING_PERMISSIONS);
             PermissionHelper.requestPermissions(this.rfidConnector, 0, permissions);
          }
