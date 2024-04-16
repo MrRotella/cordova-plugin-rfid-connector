@@ -88,8 +88,10 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
     public boolean hasPermission(String[] permissions) {
         for(String p : permissions)
         {
+            Log.d(TAG, "checking perm :" + p);
             if(!PermissionHelper.hasPermission(this.rfidConnector, p))
             {
+                Log.d(TAG, p + " MISSING");
                 return false;
             }
         }
