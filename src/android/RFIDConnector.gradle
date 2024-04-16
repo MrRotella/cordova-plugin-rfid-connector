@@ -8,11 +8,7 @@ dependencies {
   implementation 'androidx.appcompat:appcompat:1.2.0'
   implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.0.0"
   implementation(name : 'Rfid.AsciiProtocol-2.5.0-release',ext:'aar')
-  implementation(name : 'barcode_scanner_library_v2.3.1.0',ext:'aar'){
-    configurations {
-      compile.exclude group: 'com.google.code.gson', module: 'gson'
-    }
-  }
+  implementation(name : 'barcode_scanner_library_v2.6.16.0-release',ext:'aar')
   implementation(name : 'API3_LIB-release-2.0.0.2',ext:'aar')
 }
 

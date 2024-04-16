@@ -16,7 +16,7 @@
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH" />
             <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH_ADMIN" />
-            <uses-permission android:name="android.permission.BLUETOOTH_SCAN" /><!-- android:usesPermissionFlags="neverForLocation" TARGET >=31-->
+            <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" /><!-- android:usesPermissionFlags="neverForLocation" TARGET >=31-->
             <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
             <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
             <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
@@ -33,7 +33,7 @@
         <source-file src="src/cordova/plugin/rfidconnector/ZebraEventHandler.java" target-dir="src/cordova-plugin-rfidconnector/RFIDConnector" />
         <lib-file src="src/android/Rfid.AsciiProtocol-2.5.0-release.aar"/>
         <!-- <resource-file src="src/android/Rfid.AsciiProtocol-2.5.0-release.aar" target="libs/Rfid.AsciiProtocol-2.5.0-release.aar"/> -->
-        <lib-file src="src/android/barcode_scanner_library_v2.3.1.0.aar"/>
+        <lib-file src="src/android/barcode_scanner_library_v2.6.16.0-release.aar"/>
 		<!-- <resource-file src="src/android/barcode_scanner_library_v2.3.1.0.aar" target="libs/barcode_scanner_library_v2.3.1.0.aar"/> -->
         <lib-file src="src/android/API3_LIB-release-2.0.0.2.aar"/>
         <!-- <resource-file src="src/android/API3_LIB-release-2.0.0.2.aar" target="libs/API3_LIB-release-2.0.0.2.aar"/> -->
