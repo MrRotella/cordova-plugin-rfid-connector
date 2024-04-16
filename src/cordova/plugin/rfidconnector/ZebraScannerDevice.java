@@ -114,7 +114,8 @@ public class ZebraScannerDevice implements cordova.plugin.rfidconnector.ScannerD
          } else {
             Log.d(TAG, "permissions KO");
             // callbackContext.error(MISSING_PERMISSIONS);
-            PermissionHelper.requestPermissions(this.rfidConnector, 0, permissions);
+            // PermissionHelper.requestPermissions(this.rfidConnector, 0, permissions);
+            callbackContext.success("false");
          }
     }
 
