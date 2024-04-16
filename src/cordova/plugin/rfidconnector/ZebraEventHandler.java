@@ -20,6 +20,8 @@ import com.zebra.scannercontrol.DCSScannerInfo;
 import com.zebra.scannercontrol.FirmwareUpdateEvent;
 import com.zebra.scannercontrol.IDcsSdkApiDelegate;
 
+import com.zebra.barcode.sdk.sms.ConfigurationUpdateEvent;
+
 import android.content.Context;
 import android.widget.Toast;
 
@@ -297,10 +299,15 @@ class ZebraEventHandler implements IDcsSdkApiDelegate, RfidEventsListener {
         // TODO Auto-generated method stub
 
     }
-
+    
     @Override
     public void dcssdkEventAuxScannerAppeared(DCSScannerInfo var1, DCSScannerInfo var2) {
         // TODO Auto-generated method stub
 
+    }
+
+    @Override
+    public void dcssdkEventConfigurationUpdate(ConfigurationUpdateEvent configEvent) {
+        // Log.d(TAG, "dcssdkEventConfigurationUpdate appeared");
     }
 }
