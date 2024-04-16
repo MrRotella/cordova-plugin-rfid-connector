@@ -10,7 +10,7 @@ dependencies {
   implementation(name : 'Rfid.AsciiProtocol-2.5.0-release',ext:'aar')
   implementation(name : 'barcode_scanner_library_v2.3.1.0',ext:'aar'){
     configurations {
-      compile.exclude module: 'gson'
+      compile.exclude group: 'com.google.code.gson', module: 'gson'
     }
   }
   implementation(name : 'API3_LIB-release-2.0.0.2',ext:'aar')
